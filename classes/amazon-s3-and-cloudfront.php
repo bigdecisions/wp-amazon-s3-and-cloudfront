@@ -7,6 +7,7 @@ class Amazon_S3_And_CloudFront extends AWS_Plugin_Base {
 	const DEFAULT_ACL = 'public-read';
 	const PRIVATE_ACL = 'private';
 	const DEFAULT_EXPIRES = 900;
+	const UPLOAD_EXISTING = false;
 
 	const SETTINGS_KEY = 'tantan_wordpress_s3';
 
@@ -39,6 +40,35 @@ class Amazon_S3_And_CloudFront extends AWS_Plugin_Base {
 		add_filter( 'as3cf_get_attached_file_copy_back_to_local', array( $this, 'regenerate_thumbnails_get_attached_file' ) );
 
 		load_plugin_textdomain( 'as3cf', false, dirname( plugin_basename( $plugin_file_path ) ) . '/languages/' );
+	}
+	
+	
+	/** 
+	 * This function is for uploading the existing images to s3
+	**/
+	function upload_existing_images_to_s3()
+	{
+		if(self::UPLOAD_EXISTING)
+		{
+			$qstring = "SELECT wp.* FROM wp_posts wp INNER JOIN wp_postmeta wpm ON wpm.post_id = wp.id WHERE wp.post_type='attachment'";
+
+			$result = mysql_query($qstring) or die("not executed");
+		
+			while($row = mysql_fetch_array($result))
+			{
+				$post_id[] = $row['ID'];
+			}
+			$post_chunks = array_chunk($post_id, 10);
+
+			foreach($post_chunks as $chunk_key => $chunk)
+			{
+				foreach($chunk as $post_id)
+				{
+					$this->upload_attachment_to_s3($post_id);
+				}
+			}
+			die("done for all attachments");
+		}
 	}
 
 	/**
@@ -604,6 +634,7 @@ class Amazon_S3_And_CloudFront extends AWS_Plugin_Base {
 	}
 
 	function wp_get_attachment_url( $url, $post_id ) {
+		$this->upload_existing_images_to_s3();
 		$new_url = $this->get_attachment_url( $post_id );
 		if ( false === $new_url ) {
 			return $url;
